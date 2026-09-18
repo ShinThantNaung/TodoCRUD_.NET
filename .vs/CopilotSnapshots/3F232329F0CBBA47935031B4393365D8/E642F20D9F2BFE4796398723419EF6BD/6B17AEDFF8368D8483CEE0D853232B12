@@ -1,0 +1,102 @@
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Http;
+using Todo.Model;
+using System.Runtime.CompilerServices;
+using Microsoft.EntityFrameworkCore;
+using Todo.DTO;
+
+namespace Todo.Controllers
+{
+    public static class TodoController
+    {
+        public static void MapTodoEndpoints(this IEndpointRouteBuilder routes)
+        {
+            var group = routes.MapGroup("/todos");
+
+            group.MapGet("/", async (TodoDb db) =>
+            {
+                var todos = await db.Todos.ToListAsync();
+                if(todos.Count == 0)
+                {
+                    return ApiResponse<List<TodoItem>>.NotFound();
+                }
+                return ApiResponse<List<TodoItem>>.Ok(todos);
+            });
+
+            group.MapGet("/{id}", async (int id, TodoDb db) =>
+            {
+                var todo = await db.Todos.FindAsync(id);
+                if (todo == null)
+                {
+                    return ApiResponse<TodoItem>.NotFound();
+                }
+                return ApiResponse<TodoItem>.Ok(todo);
+            });
+
+            group.MapPost("/", async (TodoItem todo, TodoDb db) =>
+            {
+                if(todo is null)
+                {
+                    return ApiResponse<TodoItem>.BadRequest();
+                }
+                db.Todos.Add(todo);
+                await db.SaveChangesAsync();
+                return ApiResponse<TodoItem>.Created(todo);
+            });
+
+            group.MapPut("/{id}", async (int id, TodoDb db, TodoItem inputTodo) =>
+            {
+                var todo = await db.Todos.FindAsync(id);
+                if(todo is null)
+                {
+                    return ApiResponse<TodoItem>.NotFound();
+                }
+                if(inputTodo is null)
+                {
+                    return ApiResponse<TodoItem>.BadRequest();
+                }
+                await db.SaveChangesAsync();
+                return ApiResponse<TodoItem>.Ok(inputTodo);
+            });
+
+            group.MapPatch("/{id:int}/status", async (int id, TodoDb db) =>
+            {
+                var todo = await db.Todos.FindAsync(id);
+                if(todo is null)
+                {
+                    return ApiResponse<TodoItem>.NotFound();
+                }
+                todo.MarkAsComplete(id);
+                return ApiResponse<TodoItem>.Ok(todo);
+            });
+
+            group.MapPatch("/{id:int}/name", async (int id, TodoDb db, string newName) =>
+            {
+                if (string.IsNullOrWhiteSpace(newName))
+                {
+                    return ApiResponse<TodoItem>.BadRequest("The new name cannot be empty");
+                }
+                var todo = await db.Todos.FindAsync(id);
+                if (todo is null)
+                {
+                    return ApiResponse<TodoItem>.NotFound();
+                }
+                todo.UpdateName(id,newName);
+                return ApiResponse<TodoItem>.Ok(todo);
+            });
+
+            group.MapDelete("/{id}", async (int id,TodoDb db) =>
+            { 
+                if (await db.Todos.FindAsync(id) is TodoItem todo)
+                {
+                    db.Todos.Remove(todo);
+                    await db.SaveChangesAsync();
+                    return ApiResponse<TodoItem>.Ok(todo);
+                }
+                return ApiResponse<TodoItem>.NotFound();
+
+            });
+        }
+    }
+}
